@@ -16,6 +16,9 @@
 #include "file.h"
 #include "fcntl.h"
 
+// variable to store the count of each system call usign order syscall.h
+int count_sys[22] = {0};
+
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
 static int
@@ -54,6 +57,7 @@ fdalloc(struct file *f)
 uint64
 sys_dup(void)
 {
+  count_sys[9]++;
   struct file *f;
   int fd;
 
@@ -68,6 +72,7 @@ sys_dup(void)
 uint64
 sys_read(void)
 {
+  count_sys[4]++;
   struct file *f;
   int n;
   uint64 p;
@@ -82,6 +87,7 @@ sys_read(void)
 uint64
 sys_write(void)
 {
+  count_sys[15]++;
   struct file *f;
   int n;
   uint64 p;
@@ -97,6 +103,7 @@ sys_write(void)
 uint64
 sys_close(void)
 {
+  count_sys[20]++;
   int fd;
   struct file *f;
 
@@ -110,6 +117,7 @@ sys_close(void)
 uint64
 sys_fstat(void)
 {
+  count_sys[7]++;
   struct file *f;
   uint64 st; // user pointer to struct stat
 
@@ -123,6 +131,7 @@ sys_fstat(void)
 uint64
 sys_link(void)
 {
+  count_sys[18]++;
   char name[DIRSIZ], new[MAXPATH], old[MAXPATH];
   struct inode *dp, *ip;
 
@@ -185,9 +194,11 @@ isdirempty(struct inode *dp)
   return 1;
 }
 
+
 uint64
 sys_unlink(void)
 {
+  count_sys[17]++;
   struct inode *ip, *dp;
   struct dirent de;
   char name[DIRSIZ], path[MAXPATH];
@@ -304,6 +315,7 @@ create(char *path, short type, short major, short minor)
 uint64
 sys_open(void)
 {
+  count_sys[14]++;
   char path[MAXPATH];
   int fd, omode;
   struct file *f;
@@ -373,6 +385,7 @@ sys_open(void)
 uint64
 sys_mkdir(void)
 {
+  count_sys[19]++;
   char path[MAXPATH];
   struct inode *ip;
 
@@ -389,6 +402,7 @@ sys_mkdir(void)
 uint64
 sys_mknod(void)
 {
+  count_sys[16]++;
   struct inode *ip;
   char path[MAXPATH];
   int major, minor;
@@ -409,6 +423,7 @@ sys_mknod(void)
 uint64
 sys_chdir(void)
 {
+  count_sys[8]++;
   char path[MAXPATH];
   struct inode *ip;
   struct proc *p = myproc();
@@ -434,6 +449,7 @@ sys_chdir(void)
 uint64
 sys_exec(void)
 {
+  count_sys[6]++;
   char path[MAXPATH], *argv[MAXARG];
   int i;
   uint64 uargv, uarg;
@@ -477,6 +493,7 @@ sys_exec(void)
 uint64
 sys_pipe(void)
 {
+  count_sys[3]++;
   uint64 fdarray; // user pointer to array of two integers
   struct file *rf, *wf;
   int fd0, fd1;
@@ -502,4 +519,13 @@ sys_pipe(void)
     return -1;
   }
   return 0;
+}
+
+uint64
+sys_getcnt(void)
+{
+  count_sys[21]++;
+  int sys_ID;
+  argint(0, &sys_ID);
+  return count_sys[sys_ID-1];
 }
