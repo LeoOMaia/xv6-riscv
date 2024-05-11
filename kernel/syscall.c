@@ -80,27 +80,28 @@ argstr(int n, char *buf, int max)
 }
 
 // Prototypes for the functions that handle system calls.
-extern uint64 sys_fork(void);
-extern uint64 sys_exit(void);
-extern uint64 sys_wait(void);
-extern uint64 sys_pipe(void);
-extern uint64 sys_read(void);
-extern uint64 sys_kill(void);
-extern uint64 sys_exec(void);
-extern uint64 sys_fstat(void);
-extern uint64 sys_chdir(void);
-extern uint64 sys_dup(void);
-extern uint64 sys_getpid(void);
-extern uint64 sys_sbrk(void);
-extern uint64 sys_sleep(void);
-extern uint64 sys_uptime(void);
-extern uint64 sys_open(void);
-extern uint64 sys_write(void);
-extern uint64 sys_mknod(void);
-extern uint64 sys_unlink(void);
-extern uint64 sys_link(void);
-extern uint64 sys_mkdir(void);
-extern uint64 sys_close(void);
+extern uint64 sys_fork(void); //0
+extern uint64 sys_exit(void); //1
+extern uint64 sys_wait(void); //2
+extern uint64 sys_pipe(void); //3
+extern uint64 sys_read(void); //4
+extern uint64 sys_kill(void); //5
+extern uint64 sys_exec(void); //6
+extern uint64 sys_fstat(void); //7
+extern uint64 sys_chdir(void); //8
+extern uint64 sys_dup(void); //9
+extern uint64 sys_getpid(void); //10
+extern uint64 sys_sbrk(void); //11
+extern uint64 sys_sleep(void); //12
+extern uint64 sys_uptime(void); //13
+extern uint64 sys_open(void); //14
+extern uint64 sys_write(void); //15
+extern uint64 sys_mknod(void); //16
+extern uint64 sys_unlink(void); //17
+extern uint64 sys_link(void); //18
+extern uint64 sys_mkdir(void); //19
+extern uint64 sys_close(void); //20
+extern uint64 sys_getcnt(void); //21
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
@@ -126,6 +127,7 @@ static uint64 (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
+[SYS_getcnt]  sys_getcnt,
 };
 
 void

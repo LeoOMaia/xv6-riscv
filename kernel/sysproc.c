@@ -9,6 +9,7 @@
 uint64
 sys_exit(void)
 {
+  count_sys[1]++;
   int n;
   argint(0, &n);
   exit(n);
@@ -18,18 +19,21 @@ sys_exit(void)
 uint64
 sys_getpid(void)
 {
+  count_sys[10]++;
   return myproc()->pid;
 }
 
 uint64
 sys_fork(void)
 {
+  count_sys[0]++;
   return fork();
 }
 
 uint64
 sys_wait(void)
 {
+  count_sys[2]++;
   uint64 p;
   argaddr(0, &p);
   return wait(p);
@@ -38,6 +42,7 @@ sys_wait(void)
 uint64
 sys_sbrk(void)
 {
+  count_sys[11]++;
   uint64 addr;
   int n;
 
@@ -51,6 +56,7 @@ sys_sbrk(void)
 uint64
 sys_sleep(void)
 {
+  count_sys[12]++;
   int n;
   uint ticks0;
 
@@ -71,6 +77,7 @@ sys_sleep(void)
 uint64
 sys_kill(void)
 {
+  count_sys[5]++;
   int pid;
 
   argint(0, &pid);
@@ -82,6 +89,7 @@ sys_kill(void)
 uint64
 sys_uptime(void)
 {
+  count_sys[13]++;
   uint xticks;
 
   acquire(&tickslock);
