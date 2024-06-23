@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "pstat.h"
 
 struct cpu cpus[NCPU];
 
@@ -33,7 +34,7 @@ void
 proc_mapstacks(pagetable_t kpgtbl)
 {
   struct proc *p;
-  
+
   for(p = proc; p < &proc[NPROC]; p++) {
     char *pa = kalloc();
     if(pa == 0)
@@ -93,7 +94,7 @@ int
 allocpid()
 {
   int pid;
-  
+
   acquire(&pid_lock);
   pid = nextpid;
   nextpid = nextpid + 1;
@@ -236,7 +237,7 @@ userinit(void)
 
   p = allocproc();
   initproc = p;
-  
+
   // allocate one user page and copy initcode's instructions
   // and data into it.
   uvmfirst(p->pagetable, initcode, sizeof(initcode));
@@ -249,6 +250,7 @@ userinit(void)
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
+  p->tickets = 10;
   p->state = RUNNABLE;
 
   release(&p->lock);
@@ -320,6 +322,8 @@ fork(void)
 
   acquire(&np->lock);
   np->state = RUNNABLE;
+  np->tickets = p->tickets; //Set to son process the tickets of its father
+  np->ticks = 0;   //Set ticks value to 0
   release(&np->lock);
 
   return pid;
@@ -372,7 +376,7 @@ exit(int status)
 
   // Parent might be sleeping in wait().
   wakeup(p->parent);
-  
+
   acquire(&p->lock);
 
   p->xstate = status;
@@ -434,13 +438,51 @@ wait(uint64 addr)
   }
 }
 
-// Per-CPU process scheduler.
-// Each CPU calls scheduler() after setting itself up.
-// Scheduler never returns.  It loops, doing:
-//  - choose a process to run.
-//  - swtch to start running that process.
-//  - eventually that process transfers control
-//    via swtch back to the scheduler.
+// Return a integer between 0 and ((2^32 - 1) / 2), which is 2147483647.
+uint
+random(void)
+{
+  // Take from http://stackoverflow.com/questions/1167253/implementation-of-rand
+  static unsigned int z1 = 12345, z2 = 12345, z3 = 12345, z4 = 12345;
+  unsigned int b;
+  b  = ((z1 << 6) ^ z1) >> 13;
+  z1 = ((z1 & 4294967294U) << 18) ^ b;
+  b  = ((z2 << 2) ^ z2) >> 27; 
+  z2 = ((z2 & 4294967288U) << 2) ^ b;
+  b  = ((z3 << 13) ^ z3) >> 21;
+  z3 = ((z3 & 4294967280U) << 7) ^ b;
+  b  = ((z4 << 3) ^ z4) >> 12;
+  z4 = ((z4 & 4294967168U) << 13) ^ b;
+
+  return (z1 ^ z2 ^ z3 ^ z4) / 2;
+}
+
+// Return a random integer between a given range.
+int
+randomrange(int lo, int hi)
+{
+  if (hi < lo) {
+    int tmp = lo;
+    lo = hi;
+    hi = tmp;
+  }
+  int range = hi - lo + 1;
+  return random() % (range) + lo;
+}
+
+int
+total_tickets() {
+  int total = 0;
+  for(struct proc *p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(p->state == RUNNABLE){
+      total += p->tickets;
+    }
+    release(&p->lock);
+  }
+  return total;
+}
+
 void
 scheduler(void)
 {
@@ -452,21 +494,36 @@ scheduler(void)
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
 
+    int ticketz =total_tickets();
+    int winner_ticket = randomrange(1, ticketz);
+    struct proc* winner = 0;
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
-
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
+      if(p->state == RUNNABLE){
+        winner_ticket -= p->tickets;
+        if(winner_ticket <= 1 && !winner) {
+          winner = p;
+        }
       }
-      release(&p->lock);
+      if(p != winner){
+        release(&p->lock);
+      }
+    }
+
+    if(winner){
+      winner->state = RUNNING;
+      c->proc = winner;
+      acquire(&tickslock);
+      int last_ran = ticks;
+      release(&tickslock);
+      swtch(&c->context, &winner->context);
+      acquire(&tickslock);
+      winner->ticks += ticks - last_ran;
+      release(&tickslock);
+      // Process is done running for now.
+      // It should have changed its p->state before coming back.
+      c->proc = 0;
+      release(&winner->lock);
     }
   }
 }
@@ -536,7 +593,7 @@ void
 sleep(void *chan, struct spinlock *lk)
 {
   struct proc *p = myproc();
-  
+
   // Must acquire p->lock in order to
   // change p->state and then call sched.
   // Once we hold p->lock, we can be
@@ -615,7 +672,7 @@ int
 killed(struct proc *p)
 {
   int k;
-  
+
   acquire(&p->lock);
   k = p->killed;
   release(&p->lock);
@@ -680,4 +737,48 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+void
+settickets(int n){
+    struct proc *p;
+    int i = 0;
+
+    myproc()->tickets = n;
+
+    for(p = proc; p < &proc[NPROC]; p++) {
+        if(p->pid == myproc()->pid){
+            proc[i].tickets = n;
+            break;
+        }
+        i++;
+    }
+}
+
+int
+getpinfo(uint64 *addr){
+    struct proc *p;
+    struct pstat ps;
+    int i = 0;
+
+    for(p = proc; p < &proc[NPROC]; p++){
+        acquire(&p->lock);
+        if(p->state != UNUSED){
+            ps.num_processes++;
+            ps.inuse[i] = 1;
+            ps.tickets[i] = p->tickets;
+            ps.pid[i] = p->pid;
+            ps.ticks[i] = p->ticks;
+        }
+        else{
+            ps.inuse[i] = 0;
+        }
+        i++;
+        release(&p->lock);
+    }
+
+    if(copyout(myproc()->pagetable, *addr, (char *)&ps, sizeof(ps)) < 0)
+        return -1;
+
+    return 0;
 }

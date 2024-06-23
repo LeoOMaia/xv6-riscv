@@ -17,7 +17,7 @@
 #include "fcntl.h"
 
 // variable to store the count of each system call usign order syscall.h
-int count_sys[22] = {0};
+int count_sys[24] = {0};
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.

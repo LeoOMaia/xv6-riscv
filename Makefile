@@ -124,11 +124,13 @@ UPROGS=\
 	$U/_init\
 	$U/_kill\
 	$U/_ln\
+	$U/_lotterytest\
 	$U/_ls\
 	$U/_mkdir\
 	$U/_rm\
 	$U/_sh\
 	$U/_stressfs\
+	$U/_testtickets\
 	$U/_usertests\
 	$U/_grind\
 	$U/_wc\
