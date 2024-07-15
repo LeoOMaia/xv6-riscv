@@ -8,10 +8,7 @@
 #include "pstat.h"
 
 // for random number generation
-#define LCG_A 1103515245
-#define LCG_C 12345
-#define LCG_M 2147483648
-static int seed = 1;
+static unsigned long seed = 1;
 
 struct cpu cpus[NCPU];
 
@@ -283,12 +280,30 @@ growproc(int n)
   return 0;
 }
 
-// Generate a random number using a linear congruential generator
 int
-random(void)
+do_rand(unsigned long *ctx)
 {
-  seed = (LCG_A * seed + LCG_C) % LCG_M;
-  return seed;
+/*
+ * Compute x = (7^5 * x) mod (2^31 - 1)
+ * without overflowing 31 bits:
+ *      (2^31 - 1) = 127773 * (7^5) + 2836
+ * From "Random number generators: good ones are hard to find",
+ * Park and Miller, Communications of the ACM, vol. 31, no. 10,
+ * October 1988, p. 1195.
+ */
+    long hi, lo, x;
+
+    /* Transform to [1, 0x7ffffffe] range. */
+    x = (*ctx % 0x7ffffffe) + 1;
+    hi = x / 127773;
+    lo = x % 127773;
+    x = 16807 * lo - 2836 * hi;
+    if (x < 0)
+        x += 0x7fffffff;
+    /* Transform to [0, 0x7ffffffd] range. */
+    x--;
+    *ctx = x;
+    return (x);
 }
 
 // Create a new process, copying the parent.
@@ -480,8 +495,10 @@ scheduler(void)
       release(&p->lock);
     }
 
-    // Choose a random number between 0 and all_tickets
-    int winner = random() % all_tickets;
+    
+    // Generate a random number between 0 and all_tickets
+    seed = ticks;
+    int winner = do_rand(&seed) % all_tickets;
     if (winner < 0) {
       winner = winner * -1;
     }
