@@ -1,3 +1,5 @@
+#include "kernel/pstat.h"
+#include "kernel/param.h"
 struct stat;
 
 // system calls
@@ -23,6 +25,9 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 int getcnt(int);
+int settickets(int);
+int getpinfo(struct pstat*);
+void lottery(void);
 
 // ulib.c
 int stat(const char*, struct stat*);

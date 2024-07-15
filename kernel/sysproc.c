@@ -5,6 +5,7 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "pstat.h"
 
 uint64
 sys_exit(void)
@@ -96,4 +97,34 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+uint64
+sys_settickets(void)
+{
+  count_sys[23]++;
+  int tickets;
+  argint(0, &tickets);
+  return settickets(tickets);
+}
+
+uint64
+sys_getpinfo(void)
+{
+  count_sys[24]++;
+  uint64 p_temp;
+  struct pstat p;
+
+  // Chamada para argaddr sem verificação de retorno
+  argaddr(0, &p_temp);
+
+  // Chamada para getpinfo sem verificação de retorno
+  getpinfo(&p);
+
+  // Copia os dados para o espaço de usuário e verifica o retorno
+  if (either_copyout(1, p_temp, &p, sizeof(p)) < 0) {
+    return -1;
+  }
+
+  return 0;
 }

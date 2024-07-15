@@ -5,6 +5,13 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "pstat.h"
+
+// for random number generation
+#define LCG_A 1103515245
+#define LCG_C 12345
+#define LCG_M 2147483648
+static int seed = 1;
 
 struct cpu cpus[NCPU];
 
@@ -124,6 +131,8 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
+  p->tickets = 1; // Default number of tickets
+  p->ticks = 0; // Default number of ticks
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -274,6 +283,14 @@ growproc(int n)
   return 0;
 }
 
+// Generate a random number using a linear congruential generator
+int
+random(void)
+{
+  seed = (LCG_A * seed + LCG_C) % LCG_M;
+  return seed;
+}
+
 // Create a new process, copying the parent.
 // Sets up child kernel stack to return as if from fork() system call.
 int
@@ -298,6 +315,9 @@ fork(void)
 
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
+
+  // for child
+  np->tickets = p->tickets;
 
   // Cause fork to return 0 in the child.
   np->trapframe->a0 = 0;
@@ -452,19 +472,38 @@ scheduler(void)
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
 
+    // Loop over process table looking tickets
+    int all_tickets = 0;
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
+      all_tickets += p->tickets;
+      release(&p->lock);
+    }
 
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
+    // Choose a random number between 0 and all_tickets
+    int winner = random() % all_tickets;
+    if (winner < 0) {
+      winner = winner * -1;
+    }
+
+    // Find the process with the winning ticket
+    int current_tickets = 0;
+    for(p = proc; p < &proc[NPROC]; p++){
+      acquire(&p->lock);
+      if(p->state == RUNNABLE){
+        int start_ticks = ticks;
+        current_tickets += p->tickets;
+
+        // If the current process has more tickets than the winner
+        // then we have found our winner
+        if (current_tickets >= winner){
+          p->state = RUNNING;
+          c->proc = p;
+          swtch(&c->context, &p->context);
+          p->ticks += ticks - start_ticks;
+          c->proc = 0;
+        }
+        
       }
       release(&p->lock);
     }
@@ -680,4 +719,37 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+int
+settickets(int tickets)
+{
+  if (tickets < 1){
+    return -1;
+  }
+
+  // Set the number of tickets for the current process
+  struct proc *p = myproc();
+  acquire(&p->lock);
+  p->tickets = tickets;
+  release(&p->lock);
+  return 0;
+}
+
+int
+getpinfo(struct pstat *p)
+{
+  if (p == 0){
+    return -1;
+  }
+  
+  acquire(&pid_lock);
+  for(int i = 0; i < NPROC; i++) {
+    p->inuse[i] = proc[i].state != UNUSED;
+    p->pid[i] = proc[i].pid;
+    p->ticks[i] = proc[i].ticks;
+    p->tickets[i] = proc[i].tickets;
+  }
+  release(&pid_lock);
+  return 0;
 }

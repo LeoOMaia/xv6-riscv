@@ -37,3 +37,6 @@ entry("sbrk");
 entry("sleep");
 entry("uptime");
 entry("getcnt");
+entry("lottery");
+entry("settickets");
+entry("getpinfo");
